@@ -28,14 +28,14 @@ class TelemetryPublisher:
     ]
     TIMEOUT_SECONDS = 2
 
-    def __init__(self, treblle_api_key):
+    def __init__(self, treblle_sdk_token):
         """
         Asynchronously publishes telemetry to Treblle backend in a round-robin fashion.
 
         You shouldn't use this class directly, instead use Treblle class from the extension module.
         """
 
-        self._treblle_api_key = treblle_api_key
+        self._treblle_sdk_token = treblle_sdk_token
         self._hosts_cycle = cycle(self.BACKEND_HOSTS)
         self._session = None
 
@@ -60,7 +60,7 @@ class TelemetryPublisher:
         try:
             await self._session.post(
                 url=next(self._hosts_cycle), json=payload, timeout=self.TIMEOUT_SECONDS,
-                headers={'X-API-Key': self._treblle_api_key}
+                headers={'X-API-Key': self._treblle_sdk_token}
             )
         except Exception as e:
             logger.debug(f'Failed to send telemetry: {e.__class__.__name__}{e.args}')

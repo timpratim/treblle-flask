@@ -63,14 +63,14 @@ Just by adding Treblle to your API out of the box you get:
 ## Basic Usage
 
 You can use Treblle with Flask by importing the Treblle class and passing your Flask app to the constructor, 
-along with your Treblle API key and project ID.
+along with your Treblle SDK token and API key.
 
 ```python
 from flask import Flask
 from treblle_flask import Treblle
 
 app = Flask(__name__)
-Treblle(app, TREBLLE_API_KEY="YOUR_API_KEY", TREBLLE_PROJECT_ID="YOUR_PROJECT_ID")
+Treblle(app, TREBLLE_SDK_TOKEN="YOUR_SDK_TOKEN", TREBLLE_API_KEY="YOUR_API_KEY")
 
 @app.route('/hello')
 def hello():
@@ -80,8 +80,8 @@ def hello():
 Alternatively, set the following environment variables to configure Treblle without passing any arguments to the 
 Treblle constructor:
 
+- `TREBLLE_SDK_TOKEN`: Your Treblle SDK token
 - `TREBLLE_API_KEY`: Your Treblle API key
-- `TREBLLE_PROJECT_ID`: Your Treblle project ID
 
 That's it! You're all set to start monitoring your API with Treblle.
 

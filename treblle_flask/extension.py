@@ -30,8 +30,8 @@ class Treblle:
 
     def __init__(
         self, app=None, *,
+        TREBLLE_SDK_TOKEN: str = None,
         TREBLLE_API_KEY: str = None,
-        TREBLLE_PROJECT_ID: str = None,
         hidden_keys: Optional[Iterable[str]] = None,
         mask_auth_header: bool = True,
         limit_request_body_size: Optional[int] = None,
@@ -45,8 +45,8 @@ class Treblle:
         you can pass a dictionary of options to the constructor.
 
         :param app: The Flask application to configure.
-        :param TREBLLE_API_KEY: The API key, also available as an environment variable.
-        :param TREBLLE_PROJECT_ID: The project ID, also available as an environment variable.
+        :param TREBLLE_SDK_TOKEN: SDK token, also available as an environment variable.
+        :param TREBLLE_API_KEY: API key, also available as an environment variable.
         :param hidden_keys: A list of keys to mask in the request/response body/header payloads.
          Uses a default list if not set. To prevent masking, set to empty list or set
         :param mask_auth_header: A boolean flag whether to mask the Authorization header on request. Masking will
@@ -57,14 +57,13 @@ class Treblle:
         :param request_transformer: A function to transform the request body before sending it to Treblle.
         :param response_transformer: A function to transform the response body before sending it to Treblle.
         """
+        if TREBLLE_SDK_TOKEN and environ.get('TREBLLE_SDK_TOKEN'):
+            logger.warning('TREBLLE_SDK_TOKEN is set both as a keyword argument and environment variable!')
+        self._treblle_sdk_token = TREBLLE_SDK_TOKEN or environ.get('TREBLLE_SDK_TOKEN')
 
         if TREBLLE_API_KEY and environ.get('TREBLLE_API_KEY'):
             logger.warning('TREBLLE_API_KEY is set both as a keyword argument and environment variable!')
         self._treblle_api_key = TREBLLE_API_KEY or environ.get('TREBLLE_API_KEY')
-
-        if TREBLLE_PROJECT_ID and environ.get('TREBLLE_PROJECT_ID'):
-            logger.warning('TREBLLE_PROJECT_ID is set both as a keyword argument and environment variable!')
-        self._treblle_project_id = TREBLLE_PROJECT_ID or environ.get('TREBLLE_PROJECT_ID')
 
         if hidden_keys is not None:
             self._hidden_keys = set(hidden_keys)
@@ -89,22 +88,22 @@ class Treblle:
 
     def _handle_request(self):
         if self._telemetry_publisher is None:
-            if not self._treblle_api_key or not self._treblle_project_id:
+            if not self._treblle_sdk_token or not self._treblle_api_key:
                 logger.error(
                     f'\n\nTreblle Flask extension is not properly configured - '
-                    f'API key and project ID are required!\n\n'
-                    f'Set TREBLLE_API_KEY and TREBLLE_PROJECT_ID environment variables\n'
+                    f'SDK token and API key are required!\n\n'
+                    f'Set TREBLLE_SDK_TOKEN and TREBLLE_API_KEY environment variables\n'
                     f'or pass them as kwargs when initializing in your Flask application:\n\n'
                     f'    app = Flask(__name__)\n'
-                    f'    Treblle(app, TREBLLE_API_KEY="your-api-key", TREBLLE_PROJECT_ID="your-project-id")\n\n'
+                    f'    Treblle(app, TREBLLE_SDK_TOKEN="your-sdk-token", TREBLLE_API_KEY="your-api-key")\n\n'
                     f'For more information, visit https://docs.treblle.com/integrations/python/flask/\n\n'
                 )
 
             self._telemetry_gatherer = TelemetryGatherer(
-                self._treblle_api_key, self._treblle_project_id, self._hidden_keys, self._mask_auth_header,
+                self._treblle_sdk_token, self._treblle_api_key, self._hidden_keys, self._mask_auth_header,
                 self._limit_request_body_size, self._request_transformer, self._response_transformer
             )
-            self._telemetry_publisher = TelemetryPublisher(self._treblle_api_key)
+            self._telemetry_publisher = TelemetryPublisher(self._treblle_sdk_token)
 
         self._telemetry_gatherer.handle_request()
 

@@ -31,7 +31,7 @@ class TelemetryGatherer:
     COMMON_AUTH_SCHEMES = {'Basic', 'Bearer', 'Digest', 'Negotiate', 'OAuth', 'AWS4-HMAC-SHA256', 'HOBA', 'Mutual'}
 
     def __init__(
-        self, treblle_api_key, treblle_project_id, hidden_keys, mask_auth_header, limit_request_body_size,
+        self, treblle_sdk_token, treblle_api_key, hidden_keys, mask_auth_header, limit_request_body_size,
         request_transformer, response_transformer
     ):
         """
@@ -46,7 +46,7 @@ class TelemetryGatherer:
         self._limit_request_body_size = limit_request_body_size
         self._request_transformer = request_transformer
         self._response_transformer = response_transformer
-        self._disabled = not treblle_api_key or not treblle_project_id
+        self._disabled = not treblle_sdk_token or not treblle_api_key
 
         try:
             addrinfo = getaddrinfo(gethostname(), None)
@@ -55,7 +55,7 @@ class TelemetryGatherer:
             host_ip = 'unknown'
 
         self._payload_template = {
-            'api_key': treblle_api_key, 'project_id': treblle_project_id,
+            'api_key': treblle_sdk_token, 'project_id': treblle_api_key,
             'sdk': 'flask', 'version': 0.6,
             'data': {
                 'server': {
