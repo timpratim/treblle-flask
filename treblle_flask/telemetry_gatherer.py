@@ -55,8 +55,8 @@ class TelemetryGatherer:
             host_ip = 'unknown'
 
         self._payload_template = {
-            'api_key': treblle_sdk_token, 'project_id': treblle_api_key,
-            'sdk': 'flask', 'version': 0.6,
+            'sdk_token': treblle_sdk_token, 'api_key': treblle_api_key,
+            'sdk': 'flask', 'version': 1.0,
             'data': {
                 'server': {
                     'ip': host_ip,
