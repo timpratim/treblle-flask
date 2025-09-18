@@ -93,6 +93,21 @@ Run it:
 python app.py
 ```
 
+## Examples
+
+This repository includes a minimal runnable example:
+
+- `examples/flask_minimal/app.py`: Small Flask app instrumented with Treblle.
+
+Run locally:
+
+```bash
+pip install -e .
+export TREBLLE_SDK_TOKEN="YOUR_SDK_TOKEN"
+export TREBLLE_API_KEY="YOUR_API_KEY"
+python examples/flask_minimal/app.py
+```
+
 ## Configure With Environment Variables
 
 Set the following environment variables and initialize Treblle without arguments:
@@ -129,6 +144,9 @@ Optional configuration options help customize behavior:
 - `limit_request_body_size`: Max request size captured. Larger bodies are skipped. Default: 4 MiB.
 - `request_transformer`: Function to transform request body bytes into a JSON-serializable object.
 - `response_transformer`: Function to transform response body bytes into a JSON-serializable object.
+- `ignored_environments`: List of environments where telemetry is disabled. Default: `['dev', 'test', 'testing']`.
+- `debug`: Enable debug mode to throw exceptions immediately for development. Default: `False`.
+- `url`: Custom ingest URL. If not provided, randomly selects from available Treblle endpoints.
 
 ```python
 from flask import Flask
@@ -161,11 +179,14 @@ Treblle(
     app,
     TREBLLE_SDK_TOKEN="YOUR_SDK_TOKEN",
     TREBLLE_API_KEY="YOUR_API_KEY",
-    hidden_keys=["password", "secret", "authorization"],
+    hidden_keys=["password", "secret", "api_key"],
     mask_auth_header=True,
     limit_request_body_size=4 * 1024 * 1024,
     request_transformer=request_transformer,
     response_transformer=response_transformer,
+    ignored_environments=["dev", "test", "staging"],
+    debug=False,
+    url="https://custom.treblle.endpoint.com"
 )
 ```
 

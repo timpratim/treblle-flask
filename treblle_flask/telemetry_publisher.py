@@ -28,7 +28,7 @@ class TelemetryPublisher:
     ]
     TIMEOUT_SECONDS = 2
 
-    def __init__(self, treblle_sdk_token):
+    def __init__(self, treblle_sdk_token, treblle_api_key, custom_url=None):
         """
         Asynchronously publishes telemetry to Treblle backend in a round-robin fashion.
 
@@ -36,7 +36,12 @@ class TelemetryPublisher:
         """
 
         self._treblle_sdk_token = treblle_sdk_token
-        self._hosts_cycle = cycle(self.BACKEND_HOSTS)
+        self._treblle_api_key = treblle_api_key
+        
+        if custom_url:
+            self._hosts_cycle = cycle([custom_url])
+        else:
+            self._hosts_cycle = cycle(self.BACKEND_HOSTS)
         self._session = None
 
         self._event_loop = new_event_loop()
@@ -58,15 +63,43 @@ class TelemetryPublisher:
 
     async def _process_request(self, payload):
         try:
-            await self._session.post(
-                url=next(self._hosts_cycle), json=payload, timeout=self.TIMEOUT_SECONDS,
-                headers={'X-API-Key': self._treblle_sdk_token}
+            host_url = next(self._hosts_cycle)
+            logger.debug(f'Treblle: Sending telemetry to {host_url}')
+            import gzip
+            import json
+            
+            # Compress payload with GZIP as required by Treblle
+            json_data = json.dumps(payload).encode('utf-8')
+            compressed_data = gzip.compress(json_data)
+            
+            response = await self._session.post(
+                url=host_url, data=compressed_data, timeout=self.TIMEOUT_SECONDS,
+                headers={
+                    'X-API-Key': self._treblle_sdk_token,
+                    'Content-Type': 'application/json',
+                    'Content-Encoding': 'gzip'
+                }
             )
+            response_text = await response.text()
+            logger.debug(f'Treblle: Response status: {response.status}')
+            logger.debug(f'Treblle: Response body: {response_text}')
+            if response.status >= 300:
+                logger.warning(f'Treblle API error {response.status}: {response_text}')
+            elif response.status == 200:
+                if 'error' in response_text.lower() or 'invalid' in response_text.lower():
+                    logger.warning(f'Treblle: 200 OK but with error message: {response_text}')
+                else:
+                    logger.info('Treblle: Request accepted successfully')
         except Exception as e:
             logger.debug(f'Failed to send telemetry: {e.__class__.__name__}{e.args}')
 
     def send_to_treblle(self, payload):
-        run_coroutine_threadsafe(self._process_request(payload), self._event_loop)
+        future = run_coroutine_threadsafe(self._process_request(payload), self._event_loop)
+        # Wait a short time to get the response for debugging
+        try:
+            future.result(timeout=3)  # Wait up to 3 seconds for response
+        except Exception as e:
+            logger.warning(f'Treblle: Request failed: {e}')
 
     def teardown(self):
         if self._session:

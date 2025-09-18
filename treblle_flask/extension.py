@@ -13,6 +13,7 @@ from signal import signal, SIGINT
 from logging import getLogger
 from os import environ
 from typing import Iterable, Optional, Callable, Union
+from treblle_flask.exceptions import TreblleException
 from treblle_flask.telemetry_gatherer import TelemetryGatherer
 from treblle_flask.telemetry_publisher import TelemetryPublisher
 
@@ -24,9 +25,10 @@ class Treblle:
     DEFAULT_HIDDEN_KEYS = [
         'password', 'pwd', 'secret', 'password_confirmation',
         'passwordConfirmation', 'cc', 'card_number', 'cardNumber', 'ccv',
-        'ssn', 'credit_score', 'creditScore', 'authorization'
+        'ssn', 'credit_score', 'creditScore', 'api_key'
     ]
     DEFAULT_LIMIT_REQUEST_BODY_SIZE = 4*1024*1024
+    DEFAULT_IGNORED_ENVIRONMENTS = ['dev', 'test', 'testing']
 
     def __init__(
         self, app=None, *,
@@ -36,7 +38,10 @@ class Treblle:
         mask_auth_header: bool = True,
         limit_request_body_size: Optional[int] = None,
         request_transformer: Optional[Callable[[bytes], Union[dict, list, str, int, float]]] = None,
-        response_transformer: Optional[Callable[[bytes], Union[dict, list, str, int, float]]] = None
+        response_transformer: Optional[Callable[[bytes], Union[dict, list, str, int, float]]] = None,
+        ignored_environments: Optional[Iterable[str]] = None,
+        debug: bool = False,
+        url: Optional[str] = None
     ):
         """
         The Treblle extension entry point. Configures the extensions with the given Flask app.
@@ -56,6 +61,9 @@ class Treblle:
          captured regardless of the size.
         :param request_transformer: A function to transform the request body before sending it to Treblle.
         :param response_transformer: A function to transform the response body before sending it to Treblle.
+        :param ignored_environments: A list of environments for which we don't send requests to ingest servers.
+        :param debug: Enable debug mode to throw errors immediately for development purposes.
+        :param url: Custom ingest URL. If None, will choose randomly from available endpoints.
         """
         if TREBLLE_SDK_TOKEN and environ.get('TREBLLE_SDK_TOKEN'):
             logger.warning('TREBLLE_SDK_TOKEN is set both as a keyword argument and environment variable!')
@@ -66,7 +74,7 @@ class Treblle:
         self._treblle_api_key = TREBLLE_API_KEY or environ.get('TREBLLE_API_KEY')
 
         if hidden_keys is not None:
-            self._hidden_keys = set(hidden_keys)
+            self._hidden_keys = list(hidden_keys)
         else:
             self._hidden_keys = Treblle.DEFAULT_HIDDEN_KEYS
         self._mask_auth_header = bool(mask_auth_header)
@@ -76,8 +84,15 @@ class Treblle:
         else:
             self._limit_request_body_size = Treblle.DEFAULT_LIMIT_REQUEST_BODY_SIZE
 
+        if ignored_environments is not None:
+            self._ignored_environments = list(ignored_environments)
+        else:
+            self._ignored_environments = Treblle.DEFAULT_IGNORED_ENVIRONMENTS
+
         self._request_transformer = request_transformer
         self._response_transformer = response_transformer
+        self._debug = bool(debug)
+        self._url = url
         self._telemetry_gatherer = self._telemetry_publisher = None
 
         app.before_request(self._handle_request)
@@ -87,9 +102,10 @@ class Treblle:
         signal(SIGINT, self._teardown)
 
     def _handle_request(self):
+        logger.debug("Treblle: _handle_request called")
         if self._telemetry_publisher is None:
             if not self._treblle_sdk_token or not self._treblle_api_key:
-                logger.error(
+                error_msg = (
                     f'\n\nTreblle Flask extension is not properly configured - '
                     f'SDK token and API key are required!\n\n'
                     f'Set TREBLLE_SDK_TOKEN and TREBLLE_API_KEY environment variables\n'
@@ -98,12 +114,23 @@ class Treblle:
                     f'    Treblle(app, TREBLLE_SDK_TOKEN="your-sdk-token", TREBLLE_API_KEY="your-api-key")\n\n'
                     f'For more information, visit https://docs.treblle.com/integrations/python/flask/\n\n'
                 )
+                
+                if self._debug:
+                    if not self._treblle_sdk_token:
+                        raise TreblleException.missing_api_key()
+                    else:
+                        raise TreblleException.missing_project_id()
+                else:
+                    logger.error(error_msg)
+                return
 
+            logger.debug("Treblle: Initializing telemetry gatherer and publisher")
             self._telemetry_gatherer = TelemetryGatherer(
                 self._treblle_sdk_token, self._treblle_api_key, self._hidden_keys, self._mask_auth_header,
-                self._limit_request_body_size, self._request_transformer, self._response_transformer
+                self._limit_request_body_size, self._request_transformer, self._response_transformer,
+                self._ignored_environments, self._debug
             )
-            self._telemetry_publisher = TelemetryPublisher(self._treblle_sdk_token)
+            self._telemetry_publisher = TelemetryPublisher(self._treblle_sdk_token, self._treblle_api_key, self._url)
 
         self._telemetry_gatherer.handle_request()
 
@@ -111,8 +138,14 @@ class Treblle:
         return self._telemetry_gatherer.handle_response(response)
 
     def _teardown_request(self, exception=None):
+        logger.debug("Treblle: _teardown_request called")
+        if not self._telemetry_gatherer:
+            logger.debug("Treblle: No telemetry gatherer, skipping")
+            return exception
+            
         payload = self._telemetry_gatherer.finalize(exception)
         if payload:
+            logger.debug("Treblle: Sending payload to Treblle")
             self._telemetry_publisher.send_to_treblle(payload)
         return exception
 

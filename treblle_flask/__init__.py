@@ -11,5 +11,6 @@ to the constructor.
 """
 
 from .extension import Treblle
+from .exceptions import TreblleException
 
-__all__ = ['Treblle']
+__all__ = ['Treblle', 'TreblleException']
